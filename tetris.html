@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Tetris, the game</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                font-size: 0;
+            }
+            .cell {
+                display: inline-block;
+                height: 16px;
+                width: 16px;
+                border-radius: 5px;
+                background-color: lightgrey;
+                border: solid 2px lightgrey;
+                margin: 1px 1px 0 0;
+            }
+
+            .block {
+                background: royalblue;
+                border: solid 2px darkblue;
+
+            }
+
+            .setBlock {
+                /* background-image: url('assets/pug.png'); */
+                /* background-size: contain; */
+                background: red;
+                border: solid 2px darkred;
+            }
+
+            .prediction {
+                border: solid 2px royalblue;
+            }
+
+            button {
+                font-size: 12px;
+                margin-bottom: 5px;
+            }
+
+            #well {
+                display: inline-block;
+            }
+
+            #msgBox {
+                display: inline-block;
+                font-size: 20px;
+                margin-bottom: 5px;
+            }
+
+            #points {
+                display: inline-block;
+                font-size: 20px;
+                margin-bottom: 20px;
+            }
+            body {
+                text-align: center;
+                padding-top: 10px;
+            }
+
+        </style>
+    </head>
+    <body>
+        <div id=msgBox></div>
+        <br>
+        <button onclick="Game.newGame()">NEW GAME</button>
+        <button onclick="if ( Game._gameRunning ) { Game._gameRunning = false } else { Game._gameRunning = true }">PAUSE/RESUME</button> 
+        <br>
+        <div id=well></div>
+    </body>
+    <script>
+        // function runGame() {
+        //     setInterval(Game.tickTock(),1000);
+        // }
+        
+        var Well = function() {
+            this._avalibleBlocks = [ [ [0,0] , [0,-1] , [0,1] , [1,-1] ] ,   
+                                     [ [0,0] , [0,-1] , [0,1] , [1,1]  ] ,   
+                                     [ [0,0] , [0,-1] , [0,1] , [0,2]  ] ,   
+                                     [ [0,0] , [0,1]  , [1,0] , [1,1]  ] ,   
+                                     [ [0,0] , [0,-1] , [0,1] , [1,0]  ] , 
+                                     [ [0,0] , [0,1]  , [1,0] , [1,-1] ] , 
+                                     [ [0,0] , [0,-1] , [1,0] , [1,1]  ] ];
+            this._setBlocks = [];
+            this._gameRunning = false;
+        }
+
+        Well.prototype.fallPrediction = function() {
+            let yPred = this._activeBlockY,
+                xPred = this._activeBlockX,
+                rPred = this._activeBlockR,
+                typePred = this._activeBlockType;
+
+
+            for ( let i=true ; i ; ) {
+                if ( this.collision(xPred,yPred+1,rPred,typePred,'cell setBlock') ) {
+                    i=false;
+                } else {
+                    yPred++;
+                }
+            }
+
+            this._predictedY = yPred;
+            return yPred;
+        }
+
+        Well.prototype.drawBlock = function(x,y,r,blockType,blockClass) {
+            let yOffset = 0,
+                xOffset = 0,
+                yMod = 1,
+                xMod = 1,
+                ySrc = 0,
+                xSrc = 1; 
+
+            switch(r) {
+                case 1:
+                    yMod = -1;
+                    xMod = 1;
+                    ySrc = 1;
+                    xSrc = 0;
+                    break;
+                case 2:
+                    yMod = -1;
+                    xMod = -1;
+                    ySrc = 0;
+                    xSrc = 1;
+                    break;
+                case 3:
+                    yMod = 1;
+                    xMod = -1;
+                    ySrc = 1;
+                    xSrc = 0;
+                    break;
+            }
+
+            for ( let i=0 ; i<4 ; i++ ) {
+                yOffset = yMod*this._avalibleBlocks[blockType][i][ySrc];
+                xOffset = xMod*this._avalibleBlocks[blockType][i][xSrc];
+
+                this._cells[y+yOffset][x+xOffset].setAttribute('class',blockClass);
+            }
+        }
+
+        Well.prototype.collision = function(x,y,r,blockType,blockClass) {
+            //zwraca true gdy występuje kolizja
+
+            let yOffset = 0,
+                xOffset = 0,
+                yMod = 1,
+                xMod = 1,
+                ySrc = 0,
+                xSrc = 1; 
+
+            switch(r) {
+                case 1:
+                    yMod = -1;
+                    xMod = 1;
+                    ySrc = 1;
+                    xSrc = 0;
+                    break;
+                case 2:
+                    yMod = -1;
+                    xMod = -1;
+                    ySrc = 0;
+                    xSrc = 1;
+                    break;
+                case 3:
+                    yMod = 1;
+                    xMod = -1;
+                    ySrc = 1;
+                    xSrc = 0;
+                    break;
+            }
+
+            for ( let i=0 ; i<4 ; i++ ) {
+                yOffset = yMod*this._avalibleBlocks[blockType][i][ySrc];
+                xOffset = xMod*this._avalibleBlocks[blockType][i][xSrc];
+
+                if ( x + xOffset < 0 || x + xOffset > this._cells[0].length-1 ) {
+                    return true;
+                }
+                if ( y + yOffset > this._rows.length-1 ) {
+                    return true;
+                }
+                if ( this._cells[y+yOffset][x+xOffset].className == blockClass) {
+                    return true;
+                }
+                if ( this._cells[y+yOffset][x+xOffset].className == blockClass) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Well.prototype.createGameField = function(cells,rows,divId) {
+            // metoda tworzy pole do gry o zadanej liczbie wierszy (rows) i kolumn (cells) w miejsci div o wskazanym id (divId)
+            // utworzona siatka divów przechowywana jest w 2wymiarowej tablicy _cells
+            // możliwe jest odniesienie do wierszy przez _rows
+            // pole gry przypisane zostaje do _gameField
+            this._rowsNumb = rows;
+            this._cellsNumb = cells;
+            this._rows = [];
+            this._cells = [];
+            this._gameField = document.getElementById(divId);
+
+            this._msgBox = document.getElementById('msgBox');
+            this._msgBox.innerText = 'TETRIS';
+
+            for (let i=0 ; i < rows ; i++) {
+                this._cells[i] = [];
+                this._rows[i] = document.createElement('div');
+                this._rows[i].setAttribute('class','row');
+                this._gameField.appendChild(this._rows[i]);
+
+                for (let i2=0 ; i2 < cells ; i2++) {
+                    this._cells[i][i2] = document.createElement('div');
+                    this._cells[i][i2].setAttribute('class','cell');
+                    this._rows[i].appendChild(this._cells[i][i2]);
+                }
+            }
+        }
+
+        Well.prototype.spawnBlock = function(blockType) {
+            //rysuje klocek zadanego typu na środku u góry
+            if ( blockType > this._avalibleBlocks.length ) {
+                return 'jest fakap';
+            }
+
+            let middleCell = Math.floor(this._cells[0].length/2),
+                blockToDraw = this._avalibleBlocks[blockType];
+
+            // this._blockType = blockType;
+            this._activeBlockType = blockType;
+
+            if ( this.collision(middleCell,0,0,blockType,'cell setBlock') ) {
+                this._gameRunning = false;
+                this._msgBox.innerText = 'GAME OVER / SCORE: '+this._score;
+                return false;
+            }
+            this.drawBlock(middleCell,0,0,blockType,'cell block');
+        
+            this._activeBlockY = 0;
+            this._activeBlockX = middleCell;
+            this._activeBlockR = 0;
+
+            this.fallPrediction();
+            this.drawBlock(middleCell,this._predictedY,0,blockType,'cell prediction');
+        
+            return true;
+        }
+
+        Well.prototype.moveBlock = function(dir) {
+            //domyslny kierunek w dół, zwraca false gdy się nie uda ruszyć ze względu na kolizję
+            let yTrans = 1,
+                xTrans = 0,
+                rotation = 0;
+
+            switch(dir) {
+                case 'left':
+                    yTrans = 0;
+                    xTrans = -1;
+                    break;
+                case 'right':
+                    yTrans = 0;
+                    xTrans = 1;
+                    break;
+                case 'up':
+                    yTrans = 0;
+                    xTrans = 0;
+                    rotation = 1;
+                    break;
+            }
+
+            if ( this.collision(this._activeBlockX+xTrans,this._activeBlockY+yTrans,this._activeBlockR+rotation,this._activeBlockType,'cell setBlock') ) {
+                return false;
+            }
+
+            this.drawBlock(this._activeBlockX,this._activeBlockY,this._activeBlockR,this._activeBlockType,'cell');
+            this.drawBlock(this._activeBlockX,this._predictedY,this._activeBlockR,this._activeBlockType,'cell');
+
+            this._activeBlockY += yTrans;
+            this._activeBlockX += xTrans;
+            this._activeBlockR = (this._activeBlockR+rotation)%4;
+            this.fallPrediction();
+
+            this.drawBlock(this._activeBlockX,this._predictedY,this._activeBlockR,this._activeBlockType,'cell prediction');
+            this.drawBlock(this._activeBlockX,this._activeBlockY,this._activeBlockR,this._activeBlockType,'cell block');
+            
+            return true;
+        }
+
+        Well.prototype.tickTock = function() {
+            if ( !this._gameRunning ) {
+                return false;
+            }
+
+            if ( this.moveBlock('down') ) {
+                return true;
+            }
+
+            this.drawBlock(this._activeBlockX,this._activeBlockY,this._activeBlockR,this._activeBlockType,'cell setBlock');
+            this._score += 10;
+            this.lineClear();
+
+
+            this._msgBox.innerText = 'SCORE: '+this._score;
+            this.spawnBlock(Math.floor(Math.random()*this._avalibleBlocks.length));
+            return false;
+        }
+
+        Well.prototype.linePop = function(y) {
+            this._gameField.removeChild(this._rows[y]);
+            this._cells.splice(y,1);
+            this._rows.splice(y,1);
+
+            this._cells.splice(0,0,[]);
+            this._rows.splice(0,0,document.createElement('div'));
+            this._rows[0].setAttribute('class','row');
+            this._gameField.insertBefore(this._rows[0],this._gameField.childNodes[0]);
+
+            for ( let i=0 ; i<this._cellsNumb ; i++ ) {
+                this._cells[0][i] = document.createElement('div');
+                this._cells[0][i].setAttribute('class','cell');
+                this._rows[0].appendChild(this._cells[0][i]);
+            }
+        }
+
+        Well.prototype.lineClear = function() {
+            let fullLine = true,
+                combo = 0;
+
+            for ( let i=0 ; i<this._rowsNumb ; i++ ) {
+                fullLine = true;
+
+                for ( let i2=0 ; i2<this._cellsNumb ; i2++ ) {
+                    if ( this._cells[i][i2].className == 'cell' ) {
+                        fullLine = false;
+                    }
+                }
+                if ( fullLine ) {
+                    this.linePop(i);
+                    combo++;
+                }
+            }
+            this._score += combo * 100;
+        }
+
+        Well.prototype.clear = function() {
+
+            for (let i=0 ; i < this._rows.length ; i++) {
+                for (let i2=0 ; i2 < this._cells[i].length ; i2++) {
+                    this._cells[i][i2].setAttribute('class','cell');
+                }
+            }
+        }
+
+        Well.prototype.newGame = function() {
+            this._score = 0;
+            this.clear();
+            this.spawnBlock(Math.floor(Math.random()*this._avalibleBlocks.length));
+            this._gameRunning = true;
+        }
+
+        Game = new Well();
+        Game.createGameField(15,25,'well');
+        
+        setInterval(function () { Game.tickTock() } , 1000)
+        
+        // window.addEventListener("down", myScript);
+
+        // for (let i=0 ; i < rows ; i++) {
+        //     let row = well.appendChild(document.createElement('div'));
+        //     row.setAttribute('class',`row r${i}`);
+        //     for (let i2=0 ; i2 < cells ; i2++) {
+        //         let cell = row.appendChild(document.createElement('div'));
+        //         cell.setAttribute('class','cell');
+        //         cell.setAttribute('id',`x${i2}y${i}`)
+        //     }
+        
+        document.addEventListener('keydown', event => {
+            const key = event.key;
+            switch(key) {
+                case 'ArrowDown':
+                    Game.moveBlock('down');
+                    break;
+                case 'ArrowLeft':
+                    Game.moveBlock('left');
+                    break;
+                case 'ArrowRight':
+                    Game.moveBlock('right');
+                    break;
+                case 'ArrowUp':
+                    Game.moveBlock('up');
+                    break; 
+            }
+        });
+
+        
+    </script>
+</html>
